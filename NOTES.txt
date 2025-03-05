@@ -1,0 +1,14 @@
+Automatic Scanning
+✅ Open ports & misconfigurations (Simulated for Nmap).
+✅ Outdated software & security issues (Detected by Nikto).
+✅ WordPress-like structure (For WPScan tests).
+✅ SQL Injection vulnerability (For SQLmap testing).
+
+
+Brute Force Attack
+
+hydra -L users.txt -P passwords.txt rdp://172.16.1.126
+
+xfreerdp /u:Admin /p:Admin /v:172.16.1.126
+
+

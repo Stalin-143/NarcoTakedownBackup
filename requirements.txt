@@ -1,0 +1,8 @@
+beautifulsoup4
+opencv-python
+pandas
+pytesseract
+requests
+rich
+PyPDF2
+python-docx
