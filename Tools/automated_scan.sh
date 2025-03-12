@@ -1,5 +1,26 @@
 #!/bin/bash
 
+# Ensure required tools are installed (Arch Linux specific)
+TOOLS_GROUPS=(
+    "subfinder assetfinder amass"         # Subdomain Enumeration
+    "masscan naabu nmap"                  # Port Scanning
+    "gobuster dirsearch ffuf feroxbuster" # Directory Enumeration
+    "whatweb wappalyzer"                   # Technology Detection
+    "nikto sqlmap xsser nuclei"            # Web Vulnerability Scanning
+    "wpscan"                               # WordPress Scanning
+)
+
+# Function to find the first available tool from a group
+find_available_tool() {
+    for tool in $1; do
+        if command -v "$tool" &>/dev/null; then
+            echo "$tool"
+            return
+        fi
+    done
+    echo "none"
+}
+
 # Ask user for the website URL
 read -p "Enter the target website URL (e.g., http://example.com): " url
 
@@ -15,57 +36,66 @@ SCAN_FILE="$OUTPUT_DIR/${domain}_$(date +%Y%m%d_%H%M%S).txt"
 
 echo "Scanning: $domain"
 echo "Results will be saved to $SCAN_FILE"
-echo "--------------------------------------------------" | tee -a "$SCAN_FILE"
+echo "--------------------------------------------------" | tee "$SCAN_FILE"
 
-# Define URLs
-http_url="http://$domain"
-https_url="https://$domain"
+# Subdomain Enumeration
+subdomain_tool=$(find_available_tool "${TOOLS_GROUPS[0]}")
+if [ "$subdomain_tool" != "none" ]; then
+    echo "[+] Running Subdomain Enumeration with $subdomain_tool..." | tee -a "$SCAN_FILE"
+    $subdomain_tool -d "$domain" | tee -a "$SCAN_FILE"
+else
+    echo "[!] No subdomain enumeration tools found. Skipping." | tee -a "$SCAN_FILE"
+fi
 
-# Function to scan a given URL
-scan_website() {
-    local url=$1
-
-    echo "Scanning $url..." | tee -a "$SCAN_FILE"
-
-    # 1️⃣ Subdomain Enumeration
-    echo "Running Subdomain Enumeration..." | tee -a "$SCAN_FILE"
-    subfinder -d "$domain" | tee -a "$SCAN_FILE"
-    assetfinder --subs-only "$domain" | tee -a "$SCAN_FILE"
-
-    # 2️⃣ Full Port Scan
-    echo "Running Full Port Scan (Nmap + Masscan)..." | tee -a "$SCAN_FILE"
-    masscan -p1-65535 --rate=1000 "$domain" | tee -a "$SCAN_FILE"
-    nmap -p- -A "$domain" | tee -a "$SCAN_FILE"
-
-    # 3️⃣ Directory & File Enumeration
-    echo "Running Directory Enumeration (Gobuster + Dirsearch)..." | tee -a "$SCAN_FILE"
-    gobuster dir -u "$url" -w /usr/share/wordlists/dirb/common.txt -o "$SCAN_FILE"
-    dirsearch -u "$url" -e php,html,js,txt -t 50 | tee -a "$SCAN_FILE"
-
-    # 4️⃣ Technology & Service Detection
-    echo "Detecting Technologies (WhatWeb + Wappalyzer)..." | tee -a "$SCAN_FILE"
-    whatweb "$url" | tee -a "$SCAN_FILE"
-    wappalyzer "$url" | tee -a "$SCAN_FILE"
-
-    # 5️⃣ Vulnerability Scanning (Nikto, SQLMap, XSS, RCE)
-    echo "Running Web Vulnerability Scans..." | tee -a "$SCAN_FILE"
-    nikto -h "$url" | tee -a "$SCAN_FILE"
-    sqlmap --url "$url" --batch --dbs | tee -a "$SCAN_FILE"
-    xsser --url "$url" | tee -a "$SCAN_FILE"
-    
-    # 6️⃣ WordPress Security Scan
-    echo "Checking if $domain is a WordPress site..." | tee -a "$SCAN_FILE"
-    if whatweb "$url" | grep -q "WordPress"; then
-        echo "Running WPScan..." | tee -a "$SCAN_FILE"
-        wpscan --url "$url" --enumerate vp,ap,u | tee -a "$SCAN_FILE"
+# Port Scanning
+port_scan_tool=$(find_available_tool "${TOOLS_GROUPS[1]}")
+if [ "$port_scan_tool" != "none" ]; then
+    echo "[+] Running Port Scan with $port_scan_tool..." | tee -a "$SCAN_FILE"
+    if [ "$port_scan_tool" == "masscan" ]; then
+        masscan -p1-65535 --rate=1000 "$domain" | tee -a "$SCAN_FILE"
+    elif [ "$port_scan_tool" == "naabu" ]; then
+        naabu -host "$domain" | tee -a "$SCAN_FILE"
     else
-        echo "Not a WordPress site. Skipping WPScan." | tee -a "$SCAN_FILE"
+        nmap -p- -A "$domain" | tee -a "$SCAN_FILE"
     fi
+else
+    echo "[!] No port scanning tools found. Skipping." | tee -a "$SCAN_FILE"
+fi
 
-    echo "Scan complete for $url. Results saved in $SCAN_FILE"
-    echo "--------------------------------------------------"
-}
+# Directory Enumeration
+dir_enum_tool=$(find_available_tool "${TOOLS_GROUPS[2]}")
+if [ "$dir_enum_tool" != "none" ]; then
+    echo "[+] Running Directory Enumeration with $dir_enum_tool..." | tee -a "$SCAN_FILE"
+    $dir_enum_tool -u "$url" -w /usr/share/wordlists/dirb/common.txt | tee -a "$SCAN_FILE"
+else
+    echo "[!] No directory enumeration tools found. Skipping." | tee -a "$SCAN_FILE"
+fi
 
-# Run scans for both HTTP and HTTPS versions
-scan_website "$http_url"
-scan_website "$https_url"
+# Technology Detection
+tech_tool=$(find_available_tool "${TOOLS_GROUPS[3]}")
+if [ "$tech_tool" != "none" ]; then
+    echo "[+] Detecting Technologies with $tech_tool..." | tee -a "$SCAN_FILE"
+    $tech_tool "$url" | tee -a "$SCAN_FILE"
+else
+    echo "[!] No technology detection tools found. Skipping." | tee -a "$SCAN_FILE"
+fi
+
+# Web Vulnerability Scanning
+vuln_scan_tool=$(find_available_tool "${TOOLS_GROUPS[4]}")
+if [ "$vuln_scan_tool" != "none" ]; then
+    echo "[+] Running Web Vulnerability Scan with $vuln_scan_tool..." | tee -a "$SCAN_FILE"
+    $vuln_scan_tool -h "$url" | tee -a "$SCAN_FILE"
+else
+    echo "[!] No vulnerability scanning tools found. Skipping." | tee -a "$SCAN_FILE"
+fi
+
+# WordPress Security Scan
+wp_tool=$(find_available_tool "${TOOLS_GROUPS[5]}")
+if [ "$wp_tool" != "none" ] && whatweb "$url" | grep -q "WordPress"; then
+    echo "[+] WordPress detected! Running WPScan..." | tee -a "$SCAN_FILE"
+    $wp_tool --url "$url" --enumerate vp,ap,u | tee -a "$SCAN_FILE"
+else
+    echo "[!] WordPress scan skipped (not detected or missing WPScan)." | tee -a "$SCAN_FILE"
+fi
+
+echo "[✔] Scan complete for $domain. Results saved in $SCAN_FILE"
