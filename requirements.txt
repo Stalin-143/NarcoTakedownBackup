@@ -6,3 +6,15 @@ requests
 rich
 PyPDF2
 python-docx
+difflib
+json5
+requests[socks]
+pysocks
+stem
+scrapy
+selenium
+fake_useragent
+torpy
+mechanize
+scapy
+flask

@@ -5,6 +5,18 @@ Automatic Scanning
 ✅ SQL Injection vulnerability (For SQLmap testing).
 
 
+
+
+🔥 What's New in This Version?
+✅ Optimized for Arch Linux (Uses pacman for missing tools).
+✅ Added new tools for better scanning:
+
+Naabu → Port Scanning
+Amass → Advanced Subdomain Enumeration
+Nuclei → Web Vulnerability Scanning
+FFUF & Feroxbuster → Fast Directory & File Bruteforcing
+
+
 Brute Force Attack
 
 hydra -L users.txt -P passwords.txt rdp://172.16.1.126
