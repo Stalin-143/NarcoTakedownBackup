@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Narcotic Website Anr</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            background-color: #f9f9f9;
+        }
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #007bff;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Narcotic Website Analyzer</h1>
+        <form id="analyzeForm">
+            <input type="text" id="url" name="url" placeholder="Enter URL to analyze" required>
+            <button type="submit">Analyze</button>
+        </form>
+        <div id="loader" class="loader" style="display: none;"></div>
+        <div id="result" class="result"></div>
+    </div>
+
+    <script>
+        document.getElementById("analyzeForm").addEventListener("submit", function (e) {
+            e.preventDefault();
+            const url = document.getElementById("url").value;
+            const resultDiv = document.getElementById("result");
+            const loader = document.getElementById("loader");
+
+            // Show loader and clear previous results
+            loader.style.display = "block";
+            resultDiv.innerHTML = "";
+
+            fetch("/analyze", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: `url=${encodeURIComponent(url)}`,
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(`Server error: ${response.status} - ${text}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    resultDiv.innerHTML = `<p style="color: red;">Error: ${data.error}</p>`;
+                } else {
+                    resultDiv.innerHTML = `
+                        <p><strong>URL:</strong> ${data.url}</p>
+                        <p><strong>Is N:</strong> ${data.is_narcotic}</p>
+                        <p><strong>Confidence:</strong> ${data.confidence.toFixed(2)}</p>
+                        <p><strong>Additional Signals:</strong></p>
+                        <ul>
+                            ${Object.entries(data.additional_signals).map(([key, value]) => `
+                                <li><strong>${key}:</strong> ${value}</li>
+                            `).join("")}
+                        </ul>
+                        <p><strong>Image Analysis:</strong> ${data.image_analysis}</p>
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error("Error:", error);
+                resultDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            })
+            .finally(() => {
+                loader.style.display = "none";
+            });
+        });
+
+
+
+    </script>
+</body>
+</html>

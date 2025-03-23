@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Security Research Framework</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { background-color: #f8f9fa; font-family: Arial, sans-serif; }
+        .navbar { background-color: #343a40; }
+        .navbar-brand { color: #ffffff !important; font-weight: bold; }
+        .card { margin-bottom: 20px; border: none; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); }
+        .card-header { background-color: #007bff; color: #ffffff; font-weight: bold; }
+        .list-group-item { border: none; margin-bottom: 10px; border-radius: 5px; background-color: #ffffff; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); }
+        #map { height: 500px; width: 100%; }
+    </style>
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">Security Research Framework</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item"><a class="nav-link" href="/dashboard">Dashboard</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/monitor">Monitor</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container mt-5">
+        <div class="row">
+            <div class="col-md-12">
+                <h2 class="mb-4">Dashboard</h2>
+
+                <!-- URL Input Form -->
+                <div class="card">
+                    <div class="card-header">Monitor a Website</div>
+                    <div class="card-body">
+                        <form id="monitor-form">
+                            <div class="mb-3">
+                                <label for="url" class="form-label">Enter Website URL</label>
+                                <input type="text" class="form-control" id="url" placeholder="e.g., http://example.com or http://example.onion" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Start Monitoring</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Live Map -->
+                <div class="card mt-4">
+                    <div class="card-header">Live Map</div>
+                    <div class="card-body">
+                        <div id="map"></div>
+                    </div>
+                </div>
+
+                <!-- Monitored Websites -->
+                <div class="card mt-4">
+                    <div class="card-header">Monitored Websites</div>
+                    <div class="card-body">
+                        <ul id="monitored-websites-list" class="list-group"></ul>
+                    </div>
+                </div>
+
+                <!-- Live Data Feed -->
+                <div class="card mt-4">
+                    <div class="card-header">Live Data Feed</div>
+                    <div class="card-body">
+                        <ul id="live-data-feed" class="list-group"></ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const socket = io();
+
+        // Initialize Leaflet map
+        const map = L.map('map').setView([0, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Handle URL submission
+        document.getElementById('monitor-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const url = document.getElementById('url').value;
+
+            const response = await fetch('/api/monitor', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+
+            if (response.ok) {
+                alert('Monitoring started successfully!');
+                location.reload(); // Refresh the page to show the new monitored site
+            } else {
+                alert('Failed to start monitoring. Please check the URL and try again.');
+            }
+        });
+
+        // Live Data Feed
+        socket.on('live_data_feed', (data) => {
+            const liveDataFeed = document.getElementById('live-data-feed');
+            const li = document.createElement('li');
+            li.className = 'list-group-item';
+            li.textContent = `New listing on ${data.url}: ${data.listings[0].title}`;
+            liveDataFeed.appendChild(li);
+
+            // Add marker to the map
+            const lat = Math.random() * 180 - 90;  // Random latitude
+            const lng = Math.random() * 360 - 180; // Random longitude
+            L.marker([lat, lng]).addTo(map)
+                .bindPopup(`<b>${data.url}</b><br>${data.listings[0].title}`);
+        });
+
+        // Fetch monitored websites
+        fetch('/api/monitored_sites')
+            .then(response => response.json())
+            .then(data => {
+                const monitoredWebsitesList = document.getElementById('monitored-websites-list');
+                for (const [url, info] of Object.entries(data)) {
+                    const li = document.createElement('li');
+                    li.className = 'list-group-item';
+                    li.textContent = `${url} (Type: ${info.type}, Last checked: ${info.last_checked})`;
+                    monitoredWebsitesList.appendChild(li);
+                }
+            });
+    </script>
+</body>
+</html>
