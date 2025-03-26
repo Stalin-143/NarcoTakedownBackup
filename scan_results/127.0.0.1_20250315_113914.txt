@@ -1,0 +1,31 @@
+--------------------------------------------------
+[+] Running Subdomain Enumeration with subfinder...
+[+] Running Port Scan with masscan...
+[+] Running Directory Enumeration with gobuster...
+[!] No technology detection tools found. Skipping.
+[+] Running Web Vulnerability Scan with nikto...
+- Nikto v2.5.0
+---------------------------------------------------------------------------
++ Target IP:          127.0.0.1
++ Target Hostname:    127.0.0.1
++ Target Port:        5000
++ Start Time:         2025-03-15 11:39:27 (GMT5.5)
+---------------------------------------------------------------------------
++ Server: Werkzeug/3.1.3 Python/3.13.2
++ /: The anti-clickjacking X-Frame-Options header is not present. See: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options
++ /: The X-Content-Type-Options header is not set. This could allow the user agent to render the content of the site in a different fashion to the MIME type. See: https://www.netsparker.com/web-vulnerability-scanner/vulnerabilities/missing-content-type-header/
++ No CGI Directories found (use '-C all' to force check all possible dirs)
++ OPTIONS: Allowed HTTP Methods: OPTIONS, GET, HEAD .
++ /console: This might be interesting.
++ 8073 requests: 0 error(s) and 4 item(s) reported on remote host
++ End Time:           2025-03-15 11:39:50 (GMT5.5) (23 seconds)
+---------------------------------------------------------------------------
++ 1 host(s) tested
+
+
+      *********************************************************************
+      Portions of the server's headers (Python/3.13.2) are not in
+      the Nikto 2.5.0 database or are newer than the known string. Would you like
+      to submit this information (*no server specific data*) to CIRT.net
+      for a Nikto update (or you may email to sullo@cirt.net) (y/n)? 
+[!] WordPress scan skipped (not detected or missing WPScan).

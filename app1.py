@@ -2,6 +2,8 @@ import requests
 from flask import Flask, request, jsonify
 from datetime import datetime
 from bs4 import BeautifulSoup
+import json
+import os
 
 app = Flask(__name__)
 
@@ -14,13 +16,16 @@ class WebScraper:
         if use_tor:
             # Configure for Tor if requested
             self.session.proxies.update({
-                'http': 'socks5h://127.0.0.1:9050',
-                'https': 'socks5h://127.0.0.1:9050'
+                'http': 'socks5h://127.0.0.1:9150',  # Use port 9150 for Tor Browser
+                'https': 'socks5h://127.0.0.1:9150'
             })
+            print("Tor proxy configured:", self.session.proxies)  # Debugging
     
-    def fetch_website_content(self, url, timeout=10):
+    def fetch_website_content(self, url, timeout=30):  # Increased timeout
         """Fetch content from a website"""
         try:
+            print(f"Fetching URL: {url}")  # Debugging
+            print(f"Using Tor: {self.session.proxies}")  # Debugging
             response = self.session.get(url, timeout=timeout)
             response.raise_for_status()
             return response.text
@@ -29,7 +34,7 @@ class WebScraper:
             return None
     
     def extract_website_info(self, html_content):
-        """Extract information from website HTML and identify website type"""
+        """Extract detailed information from website HTML"""
         soup = BeautifulSoup(html_content, 'html.parser')
         
         # Extract basic info
@@ -37,17 +42,27 @@ class WebScraper:
         meta_description = soup.find('meta', attrs={'name': 'description'})['content'] \
             if soup.find('meta', attrs={'name': 'description'}) else 'No Description'
         links = [a['href'] for a in soup.find_all('a', href=True)]
+        images = [img['src'] for img in soup.find_all('img', src=True)]
         text_length = len(soup.get_text())
         
         # Identify website type
         website_type = self.identify_website_type(soup)
         
+        # Extract payment methods (if applicable)
+        payment_methods = self.extract_payment_methods(soup)
+        
+        # Extract transactions (if applicable)
+        transactions = self.extract_transactions(soup)
+        
         info = {
             'title': title,
             'meta_description': meta_description,
             'links': links,
+            'images': images,
             'text_length': text_length,
-            'website_type': website_type  # Add website type
+            'website_type': website_type,
+            'payment_methods': payment_methods,
+            'transactions': transactions
         }
         return info
     
@@ -58,6 +73,7 @@ class WebScraper:
         blog_keywords = ['blog', 'post', 'article', 'comment']
         news_keywords = ['news', 'headline', 'breaking', 'article']
         social_media_keywords = ['login', 'signup', 'profile', 'share']
+        payment_keywords = ['payment', 'checkout', 'credit card', 'paypal']
         
         # Get all text content
         text_content = soup.get_text().lower()
@@ -78,11 +94,31 @@ class WebScraper:
         if any(keyword in text_content for keyword in social_media_keywords):
             return 'Social Media'
         
+        # Check for payment-related sites
+        if any(keyword in text_content for keyword in payment_keywords):
+            return 'Payment Gateway'
+        
         # Default to 'Unknown' if no type is identified
         return 'Unknown'
     
+    def extract_payment_methods(self, soup):
+        """Extract payment methods from the website (if applicable)"""
+        # Example: Look for payment-related elements
+        payment_methods = []
+        for element in soup.find_all(class_='payment-method'):  # Adjust class name as needed
+            payment_methods.append(element.get_text())
+        return payment_methods
+    
+    def extract_transactions(self, soup):
+        """Extract transactions from the website (if applicable)"""
+        # Example: Look for transaction-related elements
+        transactions = []
+        for element in soup.find_all(class_='transaction'):  # Adjust class name as needed
+            transactions.append(element.get_text())
+        return transactions
+    
     def compare_content(self, old_content, new_content):
-        """Compare two versions of website content and return differences"""
+        """Compare two versions of website content and return detailed differences"""
         if not old_content or not new_content:
             return {"error": "Missing content for comparison"}
             
@@ -97,8 +133,14 @@ class WebScraper:
         old_links = set(a['href'] for a in old_soup.find_all('a', href=True))
         new_links = set(a['href'] for a in new_soup.find_all('a', href=True))
         
+        # Compare images
+        old_images = set(img['src'] for img in old_soup.find_all('img', src=True))
+        new_images = set(img['src'] for img in new_soup.find_all('img', src=True))
+        
         added_links = list(new_links - old_links)
         removed_links = list(old_links - new_links)
+        added_images = list(new_images - old_images)
+        removed_images = list(old_images - new_images)
         
         return {
             "text_changed": old_text != new_text,
@@ -106,6 +148,8 @@ class WebScraper:
             "new_text_length": len(new_text),
             "added_links": added_links,
             "removed_links": removed_links,
+            "added_images": added_images,
+            "removed_images": removed_images,
             "title_changed": old_soup.title != new_soup.title
         }
 
@@ -262,6 +306,10 @@ def get_site_history():
                         <li class="nav-item">
                             <a class="nav-link" href="/monitor">Add Site</a>
                         </li>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="http://127.0.0.1:5000/">Darkweb Analyzer</a>
+                        </li>
                     </ul>
                 </div>
             </div>
@@ -270,6 +318,7 @@ def get_site_history():
         <div class="container mt-4">
             <h1>History for """ + url + """</h1>
             <a href="/" class="btn btn-primary mb-4">Back to Dashboard</a>
+            
             
             <div class="card">
                 <div class="card-header">
@@ -294,7 +343,10 @@ def get_site_history():
                                         <th>Title Changed</th>
                                         <th>Added Links</th>
                                         <th>Removed Links</th>
+                                        <th>Added Images</th>
+                                        <th>Removed Images</th>
                                         <th>Website Type</th>
+                                        <th>Payment Methods</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -307,7 +359,10 @@ def get_site_history():
             title_changed = changes.get('title_changed', False)
             added_links = len(changes.get('added_links', []))
             removed_links = len(changes.get('removed_links', []))
+            added_images = len(changes.get('added_images', []))
+            removed_images = len(changes.get('removed_images', []))
             website_type = record['info'].get('website_type', 'Unknown')
+            payment_methods = record['info'].get('payment_methods', [])
             
             html += f"""
                                     <tr>
@@ -316,7 +371,10 @@ def get_site_history():
                                         <td>{'Yes' if title_changed else 'No'}</td>
                                         <td>{added_links}</td>
                                         <td>{removed_links}</td>
+                                        <td>{added_images}</td>
+                                        <td>{removed_images}</td>
                                         <td>{website_type}</td>
+                                        <td>{', '.join(payment_methods) if payment_methods else 'N/A'}</td>
                                     </tr>
             """
         
@@ -384,6 +442,9 @@ def index_template():
                         <li class="nav-item">
                             <a class="nav-link" href="/monitor">Add Site</a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="http://127.0.0.1:5000/">Darkweb Analyzer</a>
+                        </li>
                     </ul>
                 </div>
             </div>
@@ -430,12 +491,13 @@ def index_template():
                 }
                 
                 let html = '<div class="table-responsive"><table class="table table-striped">';
-                html += '<thead><tr><th>URL</th><th>Title</th><th>Last Checked</th><th>Status</th><th>Website Type</th><th>Actions</th></tr></thead><tbody>';
+                html += '<thead><tr><th>URL</th><th>Title</th><th>Last Checked</th><th>Status</th><th>Website Type</th><th>Payment Methods</th><th>Actions</th></tr></thead><tbody>';
                 
                 for (const url in sites) {
                     const site = sites[url];
                     const lastChecked = new Date(site.last_checked).toLocaleString();
                     const websiteType = site.info.website_type || 'Unknown';
+                    const paymentMethods = site.info.payment_methods || [];
                     
                     html += `<tr>
                         <td>${url}</td>
@@ -443,6 +505,7 @@ def index_template():
                         <td>${lastChecked}</td>
                         <td>${site.status}</td>
                         <td>${websiteType}</td>
+                        <td>${paymentMethods.join(', ') || 'N/A'}</td>
                         <td>
                             <button class="btn btn-sm btn-primary me-1" onclick="checkSite('${url}')">Check Now</button>
                             <button class="btn btn-sm btn-info me-1" onclick="viewHistory('${url}')">History</button>
@@ -549,6 +612,9 @@ def monitor_template():
                         <li class="nav-item">
                             <a class="nav-link active" href="/monitor">Add Site</a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="http://127.0.0.1:5000/">Darkweb Analyzer</a>
+                        </li>
                     </ul>
                 </div>
             </div>
@@ -608,9 +674,11 @@ def monitor_template():
                             <ul>
                                 <li>Text content changes</li>
                                 <li>Added or removed links</li>
+                                <li>Added or removed images</li>
                                 <li>Title changes</li>
                                 <li>Meta description changes</li>
                                 <li>Website type (e.g., E-commerce, Blog, News)</li>
+                                <li>Payment methods</li>
                             </ul>
                         </div>
                     </div>
@@ -648,8 +716,12 @@ def monitor_template():
                                 <hr>
                                 <p><strong>Title:</strong> ${result.info.title || 'N/A'}</p>
                                 <p><strong>Links found:</strong> ${result.info.links.length}</p>
+                                <p><strong>Images found:</strong> ${result.info.images.length}</p>
                                 <p><strong>Website Type:</strong> ${result.info.website_type || 'Unknown'}</p>
+                                <p><strong>Payment Methods:</strong> ${result.info.payment_methods.join(', ') || 'N/A'}</p>
                                 <a href="/" class="btn btn-primary">Go to Dashboard</a>
+                                <a href="/" class="btn btn-primary">Go to Dashboard</a>
+                                
                             </div>
                         `;
                         form.reset();
@@ -680,4 +752,4 @@ def monitor_template():
 if __name__ == "__main__":
     # Start web application
     print("Starting website monitoring application on port 5000...")
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5012)

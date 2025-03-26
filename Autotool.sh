@@ -23,7 +23,7 @@ install_packages() {
     
     # Some packages might be in AUR, try installing with yay if available
     if command -v yay &> /dev/null; then
-        AUR_PACKAGES="zaproxy metasploit"
+        AUR_PACKAGES="zaproxy metasploit wpscan"
         for package in $AUR_PACKAGES; do
             if ! is_installed "$package"; then
                 echo "Installing $package from AUR..."
@@ -65,7 +65,7 @@ remote_dns_subnet 224
 tcp_read_time_out 15000
 tcp_connect_time_out 8000
 [ProxyList]
-socks5 127.0.0.1 9050
+socks5 127.0.0.1 9150
 EOF'
     fi
 }
@@ -73,7 +73,7 @@ EOF'
 # Function to check Tor connection
 check_tor() {
     echo "Checking Tor connection..."
-    curl --socks5 127.0.0.1:9050 --socks5-hostname 127.0.0.1:9050 -s https://check.torproject.org | grep -q "Congratulations"
+    curl --socks5 127.0.0.1:9150 --socks5-hostname 127.0.0.1:9150 -s https://check.torproject.org | grep -q "Congratulations"
     if [ $? -eq 0 ]; then
         echo "Tor connection successful!"
         return 0
@@ -81,6 +81,32 @@ check_tor() {
         echo "Tor connection failed! Please check your Tor configuration."
         return 1
     fi
+}
+
+# Function to run WordPress scan
+run_wpscan() {
+    echo "==== WORDPRESS SCAN ===="
+    read -p "Enter target URL (WordPress site): " target_url
+    read -p "Is this a .onion address? (y/n): " is_onion
+    
+    # Create output directory
+    timestamp=$(date +%F_%H-%M-%S)
+    output_dir="wpscan_${timestamp}"
+    mkdir -p "$output_dir"
+    
+    if [[ "$is_onion" =~ ^[Yy] ]]; then
+        if ! check_tor; then
+            echo "Tor connection required for .onion scanning but failed. Exiting."
+            exit 1
+        fi
+        echo "Running WordPress scan via Tor..."
+        proxychains wpscan --url "$target_url" --output "$output_dir/wpscan_results.txt" --format cli-no-color
+    else
+        echo "Running WordPress scan..."
+        wpscan --url "$target_url" --output "$output_dir/wpscan_results.txt" --format cli-no-color
+    fi
+    
+    echo "WordPress scan completed. Results saved to $output_dir/wpscan_results.txt"
 }
 
 # Function to run the All-in-One scan
@@ -164,6 +190,12 @@ run_all_in_one() {
         # Only run on clearnet (sqlmap via Tor is very slow)
         echo "[+] Running SQL injection scan..."
         sqlmap -u "$target_url" --forms --batch --crawl=2 -o -v 2 --output-dir="$output_dir/sqlmap"
+        
+        # Check if it's a WordPress site and run wpscan if available
+        if grep -qi "wordpress" "$output_dir/whatweb.txt" && command -v wpscan &> /dev/null; then
+            echo "[+] WordPress detected, running wpscan..."
+            wpscan --url "$target_url" --output "$output_dir/wpscan_results.txt" --format cli-no-color
+        fi
     fi
     
     echo "==== STEP 5: DATA COLLECTION ===="
@@ -177,11 +209,11 @@ import sys
 
 # Set up for Tor proxy
 session = requests.session()
-session.proxies = {'http': 'socks5h://127.0.0.1:9050',
-                   'https': 'socks5h://127.0.0.1:9050'}
+session.proxies = {'http': 'socks5h://127.0.0.1:9150',
+                   'https': 'socks5h://127.0.0.1:9150'}
 
 try:
-    response = session.get('$target_url', timeout=30)
+    response = session.get('$target_url', timeout=10)
     soup = BeautifulSoup(response.text, 'html.parser')
     
     # Extract all links
@@ -282,7 +314,7 @@ configure_tor
 # Main display
 clear
 figlet -f slant "Narco Eraser" -w 200 | lolcat
-echo "Advanced Web Scanner & Analysis Tool for Arch Linux" | lolcat
+echo "Advanced Web Scanner & Analysis Tool" | lolcat
 
 # Main menu
 echo -e "\nPlease select an option:"
@@ -295,12 +327,18 @@ echo "6. SQL Injection Scanner"
 echo "7. Comprehensive Site Analysis"
 echo "8. Anonymous Port Scanner"
 echo "9. Tor Hidden Service Scanner"
-echo "10. All-in-One Scan (Run multiple tools at once)"
+echo "10. WordPress Vulnerability Scan"
+echo "11. All-in-One Scan (Run multiple tools at once)"
 
-read -p "Enter your choice (1-10): " choice
+read -p "Enter your choice (1-11): " choice
+
+# WordPress Scan option
+if [ "$choice" -eq 10 ]; then
+    figlet -f slant "WP Scan" -w 200 | lolcat
+    run_wpscan
 
 # All-in-One Scan option
-if [ "$choice" -eq 10 ]; then
+elif [ "$choice" -eq 11 ]; then
     figlet -f slant "All-in-One" -w 200 | lolcat
     run_all_in_one
 
@@ -473,6 +511,12 @@ elif [ "$choice" -eq 7 ]; then
         
         echo "Starting SQL injection scan..."
         sqlmap -u "$target_url" --forms --batch --crawl=3 -o -v 2 --output-dir="$output_dir/sqlmap"
+        
+        # Check if it's a WordPress site and run wpscan if available
+        if grep -qi "wordpress" "$output_dir/whatweb.txt" && command -v wpscan &> /dev/null; then
+            echo "Starting WordPress vulnerability scan..."
+            wpscan --url "$target_url" --output "$output_dir/wpscan_results.txt" --format cli-no-color
+        fi
         
         # Check if ZAP is available
         if command -v zap-cli &> /dev/null; then
